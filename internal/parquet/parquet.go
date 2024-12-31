@@ -79,19 +79,20 @@ func (pkt *Parquet) ReadRows(ch chan<- []any) {
 					}
 				}
 
-				for r := 0; r < nrows; r++ {
-					var values []any
+				// we know the number of columns
+				values := make([]any, len(pkt.Schema.Fields()))
 
-					for _, val := range rows[r] {
+				for r := 0; r < nrows; r++ {
+					for i, val := range rows[r] {
 						// type conversion
 						if val.IsNull() {
-							values = append(values, &gocql.UnsetValue)
+							values[i] = &gocql.UnsetValue
 						} else if val.Kind() == parquet.ByteArray {
-							values = append(values, val.String())
+							values[i] = val.String()
 						} else if val.Kind() == parquet.Int32 {
-							values = append(values, val.Int32())
+							values[i] = val.Int32()
 						} else if val.Kind() == parquet.Double {
-							values = append(values, val.Double())
+							values[i] = val.Double()
 						}
 					}
 
