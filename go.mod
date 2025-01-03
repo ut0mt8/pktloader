@@ -1,6 +1,6 @@
 module pktloader
 
-go 1.22.2
+go 1.23.4
 
 require (
 	github.com/gocql/gocql v1.7.0
@@ -23,3 +23,5 @@ require (
 	golang.org/x/sys v0.21.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 )
+
+replace github.com/gocql/gocql => github.com/scylladb/gocql v1.14.4

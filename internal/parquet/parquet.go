@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"sync"
 
 	"github.com/gocql/gocql"
 	"github.com/parquet-go/parquet-go"
@@ -56,58 +55,50 @@ func (pkt *Parquet) ReadSchema() error {
 
 func (pkt *Parquet) ReadRows(ch chan<- []any) {
 	rl := ratelimit.New(pkt.Limit)
-	wg := &sync.WaitGroup{}
 
 	// loop over row groups
 	for _, rgrp := range pkt.ParquetFile.RowGroups() {
-		wg.Add(1)
 
-		go func(rgrp parquet.RowGroup, ch chan<- []any) {
-			defer wg.Done()
+		reader := parquet.NewRowGroupReader(rgrp)
+		defer reader.Close()
 
-			reader := parquet.NewRowGroupReader(rgrp)
-			defer reader.Close()
+		for {
+			// read rows by chunkSize
+			rows := make([]parquet.Row, pkt.ChunkSize)
 
-			for {
-				// read rows by chunkSize
-				rows := make([]parquet.Row, pkt.ChunkSize)
-
-				nrows, err := reader.ReadRows(rows)
-				if err != nil {
-					if errors.Is(err, io.EOF) {
-						break
-					}
+			nrows, err := reader.ReadRows(rows)
+			if err != nil {
+				if errors.Is(err, io.EOF) {
+					break
 				}
+			}
 
+			for r := 0; r < nrows; r++ {
 				// we know the number of columns
 				values := make([]any, len(pkt.Schema.Fields()))
 
-				for r := 0; r < nrows; r++ {
-					for i, val := range rows[r] {
-						// type conversion
-						if val.IsNull() {
-							values[i] = &gocql.UnsetValue
-						} else if val.Kind() == parquet.ByteArray {
-							values[i] = val.String()
-						} else if val.Kind() == parquet.Int32 {
-							values[i] = val.Int32()
-						} else if val.Kind() == parquet.Double {
-							values[i] = val.Double()
-						}
-					}
-
-					// send to cql workers
-					rl.Take()
-					ch <- values
-					pkt.Queries++
-
-					if pkt.Debug && pkt.Queries%pkt.Sampling == 0 {
-						fmt.Printf("(debug) inserted %d (%d)\n", pkt.Queries, len(ch))
+				for i, val := range rows[r] {
+					// type conversion
+					if val.IsNull() {
+						values[i] = &gocql.UnsetValue
+					} else if val.Kind() == parquet.ByteArray {
+						values[i] = val.String()
+					} else if val.Kind() == parquet.Int32 {
+						values[i] = val.Int32()
+					} else if val.Kind() == parquet.Double {
+						values[i] = val.Double()
 					}
 				}
-			}
-		}(rgrp, ch)
 
-		wg.Wait()
+				// send to cql workers
+				rl.Take()
+				ch <- values
+				pkt.Queries++
+
+				if pkt.Debug && pkt.Queries%pkt.Sampling == 0 {
+					fmt.Printf("(debug) inserted %d (%d)\n", pkt.Queries, len(ch))
+				}
+			}
+		}
 	}
 }
