@@ -26,7 +26,6 @@ func main() {
 		Limit     int    `short:"l" long:"ratelimit" description:"rate limit insert per second" default:"10000"`
 		ChunkSize int    `short:"c" long:"chunksize" description:"chunk size for reading parquet rows" default:"100"`
 		Conns     int    `long:"connections" description:"number of connections by host" default:"20"`
-		Dry       bool   `long:"dryrun" description:"only decode parquet"`
 		Retries   int    `long:"retries" description:"number of retry per query" default:"5"`
 		Timeout   int    `long:"timeout" description:"timeout of a query in ms" default:"5000"`
 		Sampling  int    `long:"sample" description:"every how many qyeries print message rate" default:"10000"`
@@ -79,12 +78,10 @@ func main() {
 		cl.Debug = true
 	}
 
-	if !opts.Dry {
-		err := cl.Prepare(pkt)
-		if err != nil {
-			fmt.Printf("(error) cassandra loader prepare: %v\n", err)
-			os.Exit(1)
-		}
+	err := cl.Prepare(pkt)
+	if err != nil {
+		fmt.Printf("(error) cassandra loader prepare: %v\n", err)
+		os.Exit(1)
 	}
 
 	// sync primitive
@@ -97,9 +94,7 @@ func main() {
 		go func() {
 			defer wg.Done()
 			for v := range ch {
-				if !opts.Dry {
-					cl.Load(v)
-				}
+				cl.Load(v)
 			}
 		}()
 	}
