@@ -78,7 +78,7 @@ func main() {
 		cl.Debug = true
 	}
 
-	err := cl.Prepare(pkt)
+	err = cl.Prepare(pkt)
 	if err != nil {
 		fmt.Printf("(error) cassandra loader prepare: %v\n", err)
 		os.Exit(1)
